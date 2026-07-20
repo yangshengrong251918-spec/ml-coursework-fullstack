@@ -63,3 +63,8 @@ export function getPredictHistory() {
 export function exportResults() {
   return axios.get(`${BASE_URL}/predict/export`)
 }
+
+// 触发浏览器真正下载导出的 CSV 文件
+export function downloadExportedCsv() {
+  return axios.get(`${BASE_URL}/predict/export/download`, { responseType: 'blob' })
+}

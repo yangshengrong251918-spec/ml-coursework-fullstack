@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # Flask 主入口，所有 API 接口都在这
 
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
 import threading
 import os
@@ -12,7 +12,9 @@ import tensorflow as tf
 from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
 
 # 把项目根目录加到 path 里
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+DATA_DIR = os.path.join(BASE_DIR, 'data')
+sys.path.append(BASE_DIR)
 from config import MODEL_PATH, FEATURE_NAMES
 from model.utils import (
     generate_churn_data, get_train_test_data,
@@ -21,6 +23,9 @@ from model.utils import (
 )
 from model.train import train_model
 from model.predict import predict_single, predict_batch_from_csv
+
+# 确保 data 目录存在（首次运行会用来存生成的数据集、临时上传文件、导出结果）
+os.makedirs(DATA_DIR, exist_ok=True)
 
 app = Flask(__name__)
 CORS(app)
@@ -51,7 +56,7 @@ def get_data():
     if _cached_data is None:
         _cached_data = generate_churn_data(5000)
         # 顺便保存到 CSV
-        _cached_data.to_csv(os.path.join(os.path.dirname(__file__), 'data', 'churn_data.csv'), index=False)
+        _cached_data.to_csv(os.path.join(DATA_DIR, 'churn_data.csv'), index=False)
     return _cached_data
 
 
@@ -263,13 +268,9 @@ def get_feature_importance():
     # 如果模型已经训练好了，用训练好的模型算
     if train_status['y_test'] is not None and os.path.exists(MODEL_PATH):
         model = tf.keras.models.load_model(MODEL_PATH)
-        X_test = train_status.get('test_data')
-        if X_test is None:
-            # 重新生成一份测试数据
-            _, X_test, _, y_test, _ = get_train_test_data()
-        else:
-            _, X_test = X_test  # test_data 是 (X_test, y_test) 的元组
-
+        # 重新生成一份测试数据（训练线程只保存了 y_test/y_pred_prob，没保存 X_test，
+        # 用同样的随机种子重新划分即可拿到对应的特征数据）
+        _, X_test, _, y_test, _ = get_train_test_data()
         importances = get_feature_importance_simple(model, X_test, train_status['y_test'])
     else:
         # 没训练的话，返回基于相关性的模拟数据
@@ -336,7 +337,7 @@ def do_predict_batch():
         return jsonify({'error': '文件名是空的'}), 400
 
     # 保存到临时文件
-    tmp_path = os.path.join(os.path.dirname(__file__), 'data', '_tmp_upload.csv')
+    tmp_path = os.path.join(DATA_DIR, '_tmp_upload.csv')
     file.save(tmp_path)
 
     try:
@@ -392,14 +393,23 @@ def export_predict_results():
         rows.append(row)
 
     df = pd.DataFrame(rows)
-    csv_path = os.path.join(os.path.dirname(__file__), 'data', 'export_results.csv')
+    csv_path = os.path.join(DATA_DIR, 'export_results.csv')
     df.to_csv(csv_path, index=False, encoding='utf-8-sig')
 
     return jsonify({
         'status': 'success',
-        'downloadUrl': '/api/data/export_results.csv',
+        'downloadUrl': '/api/predict/export/download',
         'count': len(rows)
     })
+
+
+@app.route('/api/predict/export/download', methods=['GET'])
+def download_export_results():
+    """真正把导出的 CSV 文件返回给浏览器下载"""
+    filename = 'export_results.csv'
+    if not os.path.exists(os.path.join(DATA_DIR, filename)):
+        return jsonify({'error': '还没有导出过结果'}), 404
+    return send_from_directory(DATA_DIR, filename, as_attachment=True)
 
 
 if __name__ == '__main__':

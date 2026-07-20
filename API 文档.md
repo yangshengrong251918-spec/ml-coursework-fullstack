@@ -262,16 +262,20 @@
 
 ### GET /api/predict/export
 
-导出预测结果到 CSV 文件。
+把最近的预测结果整理成 CSV，保存到服务端 `backend/data/export_results.csv`。
 
 **响应示例：**
 ```json
 {
   "status": "success",
-  "downloadUrl": "/api/data/export_results.csv",
+  "downloadUrl": "/api/predict/export/download",
   "count": 10
 }
 ```
+
+### GET /api/predict/export/download
+
+配合上面的接口使用，返回 `downloadUrl` 对应的 CSV 文件流（`Content-Disposition: attachment`），前端拿到后用 Blob 触发浏览器下载。若还没调用过 `/api/predict/export`，返回 404。
 
 ---
 

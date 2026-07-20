@@ -146,7 +146,7 @@
 </template>
 
 <script>
-import { predict, predictBatch, exportResults } from '@/utils/api'
+import { predict, predictBatch, exportResults, downloadExportedCsv } from '@/utils/api'
 
 export default {
   data() {
@@ -226,12 +226,27 @@ export default {
     },
     async downloadResults() {
       try {
+        // 第一步：让后端把最近的预测结果整理成 CSV 存好
         const res = await exportResults()
-        if (res.data.status === 'success') {
-          this.$message.success('结果已导出到服务端 data/ 目录')
+        if (res.data.status !== 'success') {
+          this.$message.error('导出失败')
+          return
         }
+        // 第二步：把文件以 blob 的形式取回来，触发浏览器真正下载
+        const fileRes = await downloadExportedCsv()
+        const blob = new Blob([fileRes.data], { type: 'text/csv;charset=utf-8;' })
+        const url = window.URL.createObjectURL(blob)
+        const link = document.createElement('a')
+        link.href = url
+        link.download = 'export_results.csv'
+        document.body.appendChild(link)
+        link.click()
+        document.body.removeChild(link)
+        window.URL.revokeObjectURL(url)
+        this.$message.success(`已下载 ${res.data.count} 条预测结果`)
       } catch (e) {
         console.error('导出失败', e)
+        this.$message.error('导出失败')
       }
     }
   }

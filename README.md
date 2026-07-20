@@ -155,4 +155,4 @@ npm run dev
 - 预测历史记录存储在服务端内存中，重启服务后清空
 - 批量预测 CSV 需包含全部 10 个特征列（列名见 `config.py` 中的 `FEATURE_NAMES`）
 - 训练接口为异步操作，启动后需轮询 `/api/train/progress` 获取结果
-- 前端已配置 proxyTable，开发时不会遇到跨域问题
+- 后端已通过 `flask-cors` 开启跨域支持（`frontend/src/utils/api.js` 中直接请求 `http://localhost:5000`），因此无需依赖 `config/index.js` 里的 proxyTable 配置

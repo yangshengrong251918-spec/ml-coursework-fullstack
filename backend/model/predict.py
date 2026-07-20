@@ -78,7 +78,11 @@ def predict_batch_from_csv(csv_path):
     results = []
     for i in range(len(df)):
         row = df.iloc[i]
-        record = {col: row[col] for col in FEATURE_NAMES}
+        # 这里必须显式转成 Python 原生 int/float，
+        # 否则 pandas/numpy 的 int64 等类型会导致 Flask jsonify 报
+        # "Object of type int64 is not JSON serializable"
+        record = {col: row[col].item() if hasattr(row[col], 'item') else row[col]
+                   for col in FEATURE_NAMES}
         record['predicted_prob'] = float(probs[i])
         record['prediction'] = int(probs[i] > 0.5)
         results.append(record)
